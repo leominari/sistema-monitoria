@@ -36,6 +36,9 @@ const store = new Vuex.Store({
 			'monitoria.listar': 'rota.monitoria.listar',
 			'aluno-monitoria.inscrever': 'rota.aluno-monitoria.inscrever',
 			"aluno-monitoria.delete": 'rota.aluno-monitoria.delete',
+			"monitoria.listar-aluno": 'rota.monitoria.listar-aluno',
+			'monitoria.listar-monitor': 'rota.monitoria.listar-monitor',
+
 		},
 		usuariosAtivos: {} //username: {host, port, usuario}
 	},
@@ -799,6 +802,97 @@ const store = new Vuex.Store({
 				context.commit("log", { name: rota, user: `${socket.remoteAddress}:${socket.remotePort}`, input: resposta_delete, error: false });
 				context.commit("log", { name: "⬆️ enviando data", user: `${socket.remoteAddress}:${socket.remotePort}`, input: resposta, error: false });
 				socket.write(resposta);
+
+			}catch(erro){
+				let resposta = stringify({
+					rota: rota,
+					erro
+				});
+				context.commit("log", { name: rota, user: `${socket.remoteAddress}:${socket.remotePort}`, input: resposta, error: true });
+				context.commit("log", { name: "⬆️ enviando data", user: `${socket.remoteAddress}:${socket.remotePort}`, input: resposta, error: false });
+				socket.write(resposta);
+			}
+		},
+		async ['rota.monitoria.listar-monitor'](context, { request, socket, connection }) {
+			let {rota, usuario_monitor} = request;
+			try{
+				let usuarioLogado = context.getters['obterUsuarioPorSocket'](socket);
+				if(!usuarioLogado) throw "permissao_negada";
+				usuarioLogado = usuarioLogado.usuario;
+
+
+				//consultar horarios
+				let sql =  `select m.nome, m.pk_monitoria as id, u.usuario as usuario_monitor, u.nome as nome_monitor from usuario u
+				right join monitoria m ON m.fk_pk_usuario = u.pk_usuario
+				where m.fk_pk_usuario = ?
+				order by id`
+				let [monitorias] = await connection.execute(sql, [usuario_monitor]);
+
+				let horariosPromisses = monitorias.map(async monitoria => {
+					return await connection.execute(`select h.horario from horario_monitoria h where h.fk_pk_monitoria = ?`, [monitoria.id])
+				});
+
+				const horarios = await Promise.all(horariosPromisses);
+
+				monitorias = monitorias.map((monitoria, index) => {
+					return {
+						...monitoria,
+						horarios: horarios[index][0].map(row => row.horario),
+
+					}
+				})
+
+				let resposta = stringify({
+					rota: rota,
+					erro: "false",
+					monitorias
+				});
+				context.commit("log", { name: rota, user: `${socket.remoteAddress}:${socket.remotePort}`, input: monitorias, error: false });
+				context.commit("log", { name: "⬆️ enviando data", user: `${socket.remoteAddress}:${socket.remotePort}`, input: resposta, error: false });
+				socket.write(resposta);
+
+			}catch(erro){
+				let resposta = stringify({
+					rota: rota,
+					erro
+				});
+				context.commit("log", { name: rota, user: `${socket.remoteAddress}:${socket.remotePort}`, input: resposta, error: true });
+				context.commit("log", { name: "⬆️ enviando data", user: `${socket.remoteAddress}:${socket.remotePort}`, input: resposta, error: false });
+				socket.write(resposta);
+			}
+		},
+		async ['rota.monitoria.listar-aluno'](context, { request, socket, connection }) {
+			let {rota} = request;
+			try{
+				let usuarioLogado = context.getters['obterUsuarioPorSocket'](socket).usuario;
+				if(!usuarioLogado) throw "permissao_negada";
+
+				//Obter lista de usuarios
+				let [usuarios] = await connection.execute('SELECT u.usuario, u.nome, u.is_admin, u.is_monitor from usuario u', [usuarioLogado]).catch(e => {
+					console.error(e);
+					throw "permissao_negada";
+				});
+
+				usuarios = usuarios.map(usuario => {
+					return {
+						nome: usuario.nome,
+						usuario: usuario.usuario,
+						tipo_usuario: usuario.is_admin ? "admin" : (usuario.is_monitor ? "monitor" : "aluno")
+					}});
+
+				console.log("usuarios", usuarios)
+
+				let resposta = stringify({
+					rota: rota,
+					erro: "false",
+					usuarios
+				});
+
+				context.commit("log", { name: rota, user: `${socket.remoteAddress}:${socket.remotePort}`, input: stringify(usuarios), error: false });
+				context.commit("log", { name: "⬆️ enviando data", user: `${socket.remoteAddress}:${socket.remotePort}`, input: resposta, error: false });
+				socket.write(resposta);
+
+
 
 			}catch(erro){
 				let resposta = stringify({
