@@ -1,6 +1,8 @@
 # Sistema de Monitoria
 
+Trabalho desenvolvido em Electron/Vue para a disciplina de Sistemas Distribuidos.
 
+Consistem em um client e um servidor ambos em vuejs com electron.
 
 ## Instalação 
     git clone https://github.com/joaoaugustogrobe/Projeto-Distribuidos
